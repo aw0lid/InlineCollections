@@ -1,0 +1,123 @@
+name: .NET CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os-name }} Build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os-name: Linux
+          - os: windows-latest
+            os-name: Windows
+          - os: macos-latest
+            os-name: Mac
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          sdk: '8.x'
+          include-prerelease: true
+
+      - name: Restore
+        run: dotnet restore --verbosity minimal
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore -p:TreatWarningsAsErrors=true
+
+  test:
+    name: ${{ matrix.os-name }} Tests
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            os-name: Linux
+          - os: windows-latest
+            os-name: Windows
+          - os: macos-latest
+            os-name: Mac
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          sdk: '8.x'
+
+      - name: Run tests
+        run: dotnet test tests/InlineCollections.Tests/InlineCollections.Tests.csproj --configuration Release --logger "trx;LogFileName=TestResults.trx" --results-directory ./TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os-name }}
+          path: TestResults
+
+  benchmarks:
+    name: Performance Benchmarks
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          sdk: '8.x'
+
+      - name: Run Benchmarks
+        run: |
+          dotnet run --project benchmarks/InlineCollections.Benchmarks/InlineCollections.Benchmarks.csproj -c Release -- --exporters csv,json
+
+  validation:
+    name: Static Analysis & Reproducible Build
+    needs: [build, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          sdk: '8.x'
+
+      - name: Verify Code Formatting
+        run: dotnet format --verify-no-changes --verbosity minimal
+
+      - name: Reproducible Build Check
+        run: |
+          set -e
+          dotnet build -c Release -p:ContinuousIntegrationBuild=true -p:Deterministic=true -o build1
+          dotnet build -c Release -p:ContinuousIntegrationBuild=true -p:Deterministic=true -o build2
+          sum1=$(sha256sum build1/InlineCollections.dll | awk '{print $1}')
+          sum2=$(sha256sum build2/InlineCollections.dll | awk '{print $1}')
+          if [ "$sum1" != "$sum2" ]; then
+            echo "Reproducible build failed!"
+            exit 1
+          else
+            echo "Reproducible build passed!"
+          fi
