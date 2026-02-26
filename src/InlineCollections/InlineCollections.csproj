@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <PackageId>InlineCollections</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Ahmed Waleed</Authors>
+    <Company>aw0lid</Company>
+    <Description>High-performance, zero-allocation collection primitives for .NET using InlineArrays. Includes InlineList, InlineStack, and InlineQueue with fixed capacity of 32.</Description>
+    <PackageTags>performance;collections;inline;zero-allocation;low-latency;struct;net8</PackageTags>
+    <PackageProjectUrl>https://github.com/aw0lid/InlineCollections</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/aw0lid/InlineCollections</RepositoryUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+  <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
