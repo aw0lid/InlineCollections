@@ -6,7 +6,7 @@ InlineCollections are highly specialized. Use standard BCL collections in these 
 
 ### 1. Unbounded or large collections
 
-**Problem**: Fixed capacity of 32 is too limiting.
+**Problem**: Fixed capacity (8, 16, or 32) is too limiting.
 
 ```csharp
 // ❌ Wrong
@@ -22,7 +22,7 @@ for (int i = 0; i < 1000; i++) {
 }
 ```
 
-**Recommendation**: Use `List<T>` for unbounded growth.
+**Recommendation**: Use `List<T>` for unbounded growth. Choose `InlineList8`, `InlineList16`, or `InlineList32` based on your fixed capacity needs.
 
 ### 2. Concurrent or thread-safe scenarios
 
@@ -49,11 +49,11 @@ Task.Run(() => queue.Enqueue(msg2));  // Thread-safe
 ```csharp
 // ❌ Wrong
 interface IProcessor {
-    void Process(InlineList32<int> items);  // Compiler error
+    void Process(InlineList8<int> items);  // Compiler error: ref struct in signature
 }
 
 class Container {
-    public InlineList32<int> Items;  // Compiler error
+    public InlineList16<int> Items;  // Compiler error: ref struct as field
 }
 
 // ✅ Correct
@@ -75,7 +75,7 @@ class Container {
 ```csharp
 // ❌ Wrong
 async Task ProcessAsync() {
-    var list = new InlineList32<int>();
+    var list = new InlineList8<int>();
     list.Add(1);
     await SomeAsync();  // ❌ Compiler error
 }

@@ -4,21 +4,27 @@ This section enumerates the hard constraints and limitations of InlineCollection
 
 ## Fixed capacity
 
-**Hard limit**: Exactly 32 elements. Attempting to exceed throws `InvalidOperationException`.
+**Hard limit**: Exactly 8, 16, or 32 elements (depending on collection variant). Attempting to exceed throws `InvalidOperationException`.
 
 ```csharp
-var list = new InlineList32<int>();
-for (int i = 0; i < 33; i++) {
-    list.Add(i);  // ❌ Throws InvalidOperationException on i=32
+var list = new InlineList16<int>();
+for (int i = 0; i < 17; i++) {
+    list.Add(i);  // ❌ Throws InvalidOperationException on i=16
 }
 ```
+
+**Capacity options**:
+- `InlineList8<T>`, `InlineStack8<T>`, `InlineQueue8<T>`: 8 elements max
+- `InlineList16<T>`, `InlineStack16<T>`, `InlineQueue16<T>`: 16 elements max
+- `InlineList32<T>`, `InlineStack32<T>`, `InlineQueue32<T>`: 32 elements max
 
 **Impact**:
 - Collections cannot grow dynamically
 - Capacity planning required upfront
 - Unsuitable for unbounded workloads
+- Size selection impacts stack usage (e.g., `InlineList32<int>` uses ~132 bytes, `InlineList8<int>` uses ~36 bytes)
 
-**Recommendation**: Profile and measure. If you consistently hit or exceed 32 elements, use `List<T>`.
+**Recommendation**: Profile and measure. If you consistently need more than 32 elements, use `List<T>`. If you consistently need fewer than 8, use `InlineList8<T>` to minimize stack usage.
 
 ## Unmanaged elements only
 
@@ -60,13 +66,25 @@ struct Point {
 - Cannot be used in async/await
 - Cannot be captured in closures that outlive the frame
 
+**Stack usage considerations**:
+- `InlineList8<int>`: ~36 bytes
+- `InlineList16<int>`: ~68 bytes
+- `InlineList32<int>`: ~132 bytes
+- Queue variants are larger due to additional head/tail fields
+- Declare collections carefully in deeply nested calls to avoid stack overflow on large element types
+
+> **Warning**: The struct size is Capacity × sizeof(T). Using a large element type or
+> copying the collection by value across many frames can create significant stack
+> pressure and may trigger a `StackOverflowException`. Consider passing the
+> collection by `ref`/`in`, or using a smaller variant or heap-based alternative.
+
 **Invalid examples**:
 ```csharp
 class Container {
-    public InlineList32<int> List;  // ❌ Cannot store in class
+    public InlineList8<int> List;  // ❌ Cannot store in class
 }
 
-object boxed = new InlineList32<int>();  // ❌ Cannot box
+object boxed = new InlineList16<int>();  // ❌ Cannot box
 
 async Task ProcessAsync() {
     var list = new InlineList32<int>();
@@ -76,8 +94,9 @@ async Task ProcessAsync() {
 
 **Valid examples**:
 ```csharp
-var list = new InlineList32<int>();  // ✅ Local variable
-void Method(ref InlineList32<int> list) { ... }  // ✅ ref parameter
+var list = new InlineList8<int>();  // ✅ Local variable
+void Method(ref InlineList16<int> list) { ... }  // ✅ ref parameter
+```
 ```
 
 ## Value-type copying cost

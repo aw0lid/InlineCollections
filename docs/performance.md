@@ -11,16 +11,24 @@ This document explains the performance model, benchmark methodology, and results
 
 ## Zero-allocation philosophy
 
-InlineCollections stores 32 elements inline, eliminating the need to allocate on the heap. 
+InlineCollections stores elements inline (8, 16, or 32 elements depending on type), eliminating the need to allocate on the heap.
 
-| Collection | Heap Allocations |
-|:---|:---:|
-| **InlineList32<int>** | **0** |
-| List<int>(capacity:8) | 1 |
-| **InlineStack32<int>** | **0** |
-| Stack<int>() | 1 |
-| **InlineQueue32<int>** | **0** |
-| Queue<int>() | 1 |
+> **Note:** While heap allocations are removed, the struct's size grows with `Capacity * sizeof(T)`. Passing large value types by value in hot paths can degrade performance and increase stack pressure. Whenever possible, pass collections by `ref` or `in` or use a smaller-capacity variant to minimize copying.
+
+| Collection | Heap Allocations | Capacity |
+|:---|:---:|:---:|
+| **InlineList8<int>** | **0** | 8 |
+| **InlineList16<int>** | **0** | 16 |
+| **InlineList32<int>** | **0** | 32 |
+| List<int>(capacity:8) | 1 | 4+ |
+| **InlineStack8<int>** | **0** | 8 |
+| **InlineStack16<int>** | **0** | 16 |
+| **InlineStack32<int>** | **0** | 32 |
+| Stack<int>() | 1 | 10+ |
+| **InlineQueue8<int>** | **0** | 8 |
+| **InlineQueue16<int>** | **0** | 16 |
+| **InlineQueue32<int>** | **0** | 32 |
+| Queue<int>() | 1 | 10+ |
 
 ## Benchmark methodology
 

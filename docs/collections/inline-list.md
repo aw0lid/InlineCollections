@@ -1,13 +1,23 @@
-# InlineList32<T>
+# InlineList<T> (sizes 8, 16, 32)
 
-A high-performance, stack-allocated list with a fixed capacity of 32 unmanaged elements.
+A high-performance, stack-allocated list with fixed capacity of 8, 16, or 32 unmanaged elements.
 
 ## Overview
 
-`InlineList32<T>` provides List-like semantics with zero heap allocations for the fast path. All 32 elements are stored inline within the struct, eliminating allocation and GC overhead for small, short-lived lists.
+`InlineList8<T>`, `InlineList16<T>`, and `InlineList32<T>` provide List-like semantics with zero heap allocations. Elements are stored inline within the struct. Choose your size based on typical working set:
+- **InlineList8**: Minimal overhead (~36 bytes), 8-element max
+- **InlineList16**: Moderate overhead (~68 bytes), 16-element max
+- **InlineList32**: Larger overhead (~132 bytes), 32-element max
+
+> **Caution:** The struct's stack footprint scales with `Capacity * sizeof(T)`.
+> Using large element types can lead to significant stack pressure and even
+> `StackOverflowException`. In performance-critical code, pass the list by
+> `ref`/`in` or opt for a smaller capacity or heap-based collection.
+
+All sizes are `ref struct` types optimized for ultra-low latency.
 
 **Key characteristics**:
-- Fixed capacity: exactly 32 elements
+- Fixed capacity: exactly 8, 16, or 32 elements (depending on variant)
 - Stack-allocated: no heap allocation
 - Ref struct: cannot be stored in classes or arrays
 - Zero-copy Span: efficient iteration and algorithms
@@ -16,12 +26,15 @@ A high-performance, stack-allocated list with a fixed capacity of 32 unmanaged e
 ## Type signature
 
 ```csharp
-public ref struct InlineList32<T> where T : unmanaged, IEquatable<T>
+public ref struct InlineList8<T> where T : unmanaged, IEquatable<T>
 {
-    public const int Capacity = 32;
+    public const int Capacity = 8;
     public int Count { get; }
     // ... methods ...
 }
+
+// Similarly for InlineList16<T> and InlineList32<T>
+// with Capacity = 16 and 32 respectively
 ```
 
 ## API reference
@@ -30,14 +43,16 @@ public ref struct InlineList32<T> where T : unmanaged, IEquatable<T>
 
 ```csharp
 // Default constructor: empty list
-var list = new InlineList32<int>();
+var list8 = new InlineList8<int>();
+var list16 = new InlineList16<int>();
+var list32 = new InlineList32<int>();
 
-// Constructor with initial span: copies elements
+// Constructor with initial span: copies elements (respects capacity)
 ReadOnlySpan<int> items = stackalloc int[] { 1, 2, 3 };
-var list = new InlineList32<int>(items);  // Count becomes 3
+var list = new InlineList8<int>(items);  // Count becomes 3
 ```
 
-Throws `InvalidOperationException` if the span length exceeds capacity (32).
+Throws `InvalidOperationException` if the span length exceeds the capacity (8, 16, or 32).
 
 ### Adding elements
 
@@ -223,32 +238,37 @@ ProcessBatch(ref packets);  // No copy
 
 | Exception | Condition |
 |-----------|-----------|
-| `InvalidOperationException` | Add/Insert when Count == 32 |
-| `InvalidOperationException` | AddRange when result would exceed 32 |
+| `InvalidOperationException` | Add/Insert when Count == capacity (8, 16, or 32) |
+| `InvalidOperationException` | AddRange when result would exceed capacity |
 | `ArgumentOutOfRangeException` | RemoveAt with invalid index |
 
 ## Limitations
 
-- **Fixed capacity**: Exactly 32 elements; exceeding throws
+- **Fixed capacity**: Exactly 8, 16, or 32 elements (depending on variant); exceeding throws
 - **Unmanaged types only**: `T : unmanaged, IEquatable<T>`
 - **Unsafe indexing**: No bounds checking on indexer; caller must ensure valid indices
 - **Stack storage**: Cannot be stored in reference types or async contexts
-- **Value semantics**: Assignment and parameter passing copy the entire struct (up to 132 bytes)
+- **Value semantics**: Assignment and parameter passing copy the entire struct (36-132 bytes depending on size)
+- **Stack usage**: Choose appropriate size; `InlineList32<int>` uses ~132 bytes, `InlineList8<int>` uses ~36 bytes
 
 ## Performance expectations
 
-- **Small element types** (`int`, `long`): 3-5x faster than `List<T>` for Add operations (zero allocation)
+- **Small element types** (`int`, `long`): 3-7x faster than `List<T>` for Add operations (zero allocation)
 - **Indexer access**: Near-identical to `List<T>` (both use direct memory access)
 - **Memory**: 0 allocations vs 1 for `List<T>`
-- **Copy cost**: ~3ns for `InlineList32<int>`, scales with element size
+- **Copy cost**: 
+  - `InlineList8<int>`: ~1ns
+  - `InlineList16<int>`: ~2ns
+  - `InlineList32<int>`: ~3ns
 
 ## When to use
 
 - Hot-path loops creating many small lists
-- Fixed-size buffers or working sets up to 32 elements
+- Fixed-size buffers or working sets (8-32 elements)
 - Tight inner loops where allocation is a bottleneck
 - Stack-based processing (frame-local state)
 - Network packet buffers or protocol parsing
+- Choose size based on typical capacity needs (8 for minimal, 32 for maximum)
 
 ## When NOT to use
 

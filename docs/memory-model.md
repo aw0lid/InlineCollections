@@ -6,22 +6,24 @@ This document explains the memory semantics and lifetime rules for InlineCollect
 
 ### InlineCollections are stack-allocated
 
-When you declare an `InlineList32<int>` as a local variable:
+When you declare an `InlineList8<int>`, `InlineList16<int>`, or `InlineList32<int>` as a local variable:
 
 ```csharp
 void MyMethod()
 {
-    var list = new InlineList32<int>();  // Allocated on stack
-    list.Add(1);
+    var list8 = new InlineList8<int>();    // 36 bytes on stack
+    var list16 = new InlineList16<int>();  // 68 bytes on stack
+    var list32 = new InlineList32<int>();  // 132 bytes on stack
+    list32.Add(1);
 }
-// list goes out of scope; stack pointer restored
+// All structs go out of scope; stack pointer restored
 ```
 
-The struct is allocated directly on the method's stack frame. No heap allocation occurs.
+Each collection is allocated directly on the method's stack frame. No heap allocation occurs.
 
-**Memory layout on stack**:
+**Memory layout on stack (InlineList32<int>)**:
 ```
-Stack pointer: [...] [InlineList32<int> = 128 bytes] [← ESP]
+Stack pointer: [...] [InlineList32<int> = 132 bytes] [← ESP]
               [buffer (32 ints = 128 bytes) + _count (4 bytes)]
 ```
 
@@ -46,16 +48,24 @@ The reference (`this` pointer) sits on the stack, but the data lives on the GC h
 
 ### Copying on assignment
 
-`InlineList32<T>` is a value type; assignments copy the entire struct:
+`InlineList8<T>`, `InlineList16<T>`, and `InlineList32<T>` are value types; assignments copy the entire struct:
 
 ```csharp
-var list1 = new InlineList32<int>();
+var list1 = new InlineList8<int>();
 list1.Add(42);
 
-var list2 = list1;  // COPY: all 32 elements + metadata copied
+var list2 = list1;  // COPY: all 8 elements + metadata copied (36 bytes)
 list2.Add(99);
 
 // list1.Count == 1, list2.Count == 2  (independent!)
+```
+
+> **Stack memory note**: Each collection instance consumes `Capacity * sizeof(T)` bytes on the stack.
+> Using a large unmanaged `T` (or copying the struct by value in a deep call chain) can
+> add significant stack pressure and increase the risk of a `StackOverflowException`.
+> Passing the collection by `ref` or `in`, or selecting a smaller capacity, mitigates this
+> cost.
+
 ```
 
 This is identical to how `int` or `DateTime` work: assignment creates a copy.
@@ -97,12 +107,12 @@ Process(ref list);  // Efficient: no copy
 
 ### Ref struct constraint
 
-`InlineList32<T>` is a `ref struct`:
+`InlineList8<T>`, `InlineList16<T>`, and `InlineList32<T>` are `ref struct` types:
 
 ```csharp
-public ref struct InlineList32<T> where T : unmanaged, IEquatable<T>
+public ref struct InlineList8<T> where T : unmanaged, IEquatable<T>
 {
-    private InlineArray32<T> _buffer;
+    private InlineArray8<T> _buffer;
     private int _count;
 }
 ```
@@ -119,10 +129,10 @@ These restrictions enforce **compile-time safety**: the struct's stack memory is
 
 **✅ Valid**:
 ```csharp
-var list = new InlineList32<int>();  // Stack local
+var list = new InlineList8<int>();  // Stack local
 list.Add(42);
 
-void Method(ref InlineList32<int> list) { ... }
+void Method(ref InlineList8<int> list) { ... }
 Method(ref list);  // Pass by ref (reference to stack memory)
 ```
 
@@ -130,19 +140,31 @@ Method(ref list);  // Pass by ref (reference to stack memory)
 ```csharp
 class Container
 {
-    public InlineList32<int> List;  // ❌ Cannot be a field of a class
+    public InlineList8<int> List;  // ❌ Cannot be a field of a class
 }
 
-object boxed = new InlineList32<int>();  // ❌ Cannot box
+object boxed = new InlineList8<int>();  // ❌ Cannot box
 ```
 
 ## Inline storage and buffer
 
 ### Inline array
 
-The `InlineArray32<T>` struct embeds 32 consecutive elements:
+The `InlineArray8<T>`, `InlineArray16<T>`, and `InlineArray32<T>` structs embed consecutive elements:
 
 ```csharp
+[InlineArray(8)]
+internal struct InlineArray8<T>
+{
+    private T _element0;
+}
+
+[InlineArray(16)]
+internal struct InlineArray16<T>
+{
+    private T _element0;
+}
+
 [InlineArray(32)]
 internal struct InlineArray32<T>
 {

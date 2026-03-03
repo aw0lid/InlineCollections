@@ -6,13 +6,14 @@ InlineCollections is engineered for ultra-low-latency scenarios where allocation
 
 ### 1. Zero allocations on the hot path
 
-The primary goal is to eliminate heap allocations for small, short-lived collections. By storing 32 elements inline, we avoid invoking the allocator and GC for the common case.
+The primary goal is to eliminate heap allocations for small, short-lived collections. By storing elements inline (8, 16, or 32), we avoid invoking the allocator and GC for the common case.
 
 ### 2. Predictability
 
 - APIs are explicit about memory costs: No hidden allocations or copying
-- Fixed capacity makes memory footprint calculable
+- Fixed capacity (8, 16, or 32) makes memory footprint calculable
 - Exceptions thrown clearly (not silent failures or silent degradation)
+- Size selection allows developers to balance capacity vs stack usage
 
 ### 3. Unsafe where necessary
 
@@ -30,10 +31,11 @@ Collections are `ref struct` types, not reference types. This enforces:
 
 ### 5. Simplicity over universality
 
-Fixed capacity of 32 elements (no dynamic growth) keeps the API small and predictable:
+Fixed capacity (8, 16, or 32 elements, no dynamic growth) keeps the API small and predictable:
 - Clear error conditions (throws when full)
 - No reallocation or amortization logic
 - Straightforward memory layout
+- Multiple sizes for different capacity/memory trade-offs
 
 ## What InlineCollections is
 

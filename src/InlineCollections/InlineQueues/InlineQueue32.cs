@@ -1,7 +1,8 @@
-using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using InlineCollections.CoreLogic;
+using InlineCollections.Enumeration;
 
 namespace InlineCollections
 {
@@ -9,6 +10,13 @@ namespace InlineCollections
     /// Provides a high-performance, stack-allocated Queue with a fixed capacity of 32 elements.
     /// Eliminates heap allocations and reduces GC pressure.
     /// </summary>
+    /// <remarks>
+    /// Since elements are stored inline, the struct size becomes <c>Capacity * sizeof(T)</c>.
+    /// Large unmanaged element types can impose significant stack pressure and risk a
+    /// <see cref="StackOverflowException"/>. To reduce copying cost, pass the queue by
+    /// <c>ref</c> or <c>in</c>, or choose a smaller variant or heap-allocated alternative
+    /// for large element sizes.
+    /// </remarks>
     /// <typeparam name="T">The type of unmanaged elements in the queue.</typeparam>
     [SkipLocalsInit]
     [StructLayout(LayoutKind.Sequential)]
@@ -31,6 +39,11 @@ namespace InlineCollections
         public readonly int Count => _count;
 
         /// <summary>
+        /// Returns an enumerator for the <see cref="InlineQueue32{T}"/>.
+        /// </summary>
+        public QueueEnumerator<T> GetEnumerator() => new(AsSpan(), _head, _count, Mask);
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="InlineQueue32{T}"/> struct.
         /// </summary>
         public InlineQueue32()
@@ -49,10 +62,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Enqueue(T item)
         {
-            if ((uint)_count >= Capacity) ThrowFull();
-            Unsafe.Add(ref _buffer[0], _tail) = item;
-            _tail = (_tail + 1) & Mask;
-            _count++;
+            InlineQueueCore.Enqueue(in item, _buffer, ref _tail, ref _count);
         }
 
         /// <summary>
@@ -63,11 +73,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryEnqueue(T item)
         {
-            if ((uint)_count >= Capacity) return false;
-            Unsafe.Add(ref _buffer[0], _tail) = item;
-            _tail = (_tail + 1) & Mask;
-            _count++;
-            return true;
+            return InlineQueueCore.TryEnqueue(in item, _buffer, ref _tail, ref _count);
         }
 
         /// <summary>
@@ -78,11 +84,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Dequeue()
         {
-            if (_count == 0) ThrowEmpty();
-            T item = Unsafe.Add(ref _buffer[0], _head);
-            _head = (_head + 1) & Mask;
-            _count--;
-            return item;
+            return InlineQueueCore.Dequeue<T>(_buffer, ref _head, ref _count);
         }
 
         /// <summary>
@@ -93,15 +95,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryDequeue([MaybeNullWhen(false)] out T result)
         {
-            if (_count == 0)
-            {
-                result = default;
-                return false;
-            }
-            result = Unsafe.Add(ref _buffer[0], _head);
-            _head = (_head + 1) & Mask;
-            _count--;
-            return true;
+            return InlineQueueCore.TryDequeue<T>(_buffer, ref _head, ref _count, out result);
         }
 
         /// <summary>
@@ -112,8 +106,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly ref T Peek()
         {
-            if (_count == 0) ThrowEmpty();
-            return ref Unsafe.Add(ref Unsafe.AsRef(in _buffer[0]), _head);
+            return ref InlineQueueCore.Peek<T>(this.AsSpan(), _head, _count);
         }
 
         /// <summary>
@@ -128,41 +121,6 @@ namespace InlineCollections
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private readonly ReadOnlySpan<T> AsFullSpanReadOnly() => MemoryMarshal.CreateReadOnlySpan(ref Unsafe.AsRef(in _buffer[0]), Capacity);
-
-        /// <summary>
-        /// Returns an enumerator for the <see cref="InlineQueue32{T}"/>.
-        /// </summary>
-        public Enumerator GetEnumerator() => new Enumerator(AsFullSpanReadOnly(), _head, _count);
-
-        /// <summary>
-        /// Enumerates the elements of an <see cref="InlineQueue32{T}"/>.
-        /// </summary>
-        public ref struct Enumerator
-        {
-            private readonly ReadOnlySpan<T> _buffer;
-            private readonly int _head;
-            private readonly int _count;
-            private int _index;
-
-            internal Enumerator(ReadOnlySpan<T> buffer, int head, int count)
-            {
-                _buffer = buffer;
-                _head = head;
-                _count = count;
-                _index = -1;
-            }
-
-            public readonly ref readonly T Current => ref _buffer[(_head + _index) & Mask];
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool MoveNext()
-            {
-                return ++_index < _count;
-            }
-        }
-
-        [DoesNotReturn] private static void ThrowFull() => throw new InvalidOperationException("Queue Full");
-        [DoesNotReturn] private static void ThrowEmpty() => throw new InvalidOperationException("Queue Empty");
+        private readonly Span<T> AsSpan() => MemoryMarshal.CreateSpan(ref Unsafe.AsRef(in _buffer[0]), Capacity);
     }
 }

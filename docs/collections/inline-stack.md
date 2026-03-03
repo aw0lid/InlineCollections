@@ -1,13 +1,22 @@
-# InlineStack32<T>
+# InlineStack<T> (sizes 8, 16, 32)
 
-A high-performance, stack-allocated LIFO (Last-In-First-Out) collection with a fixed capacity of 32 unmanaged elements.
+A high-performance, stack-allocated LIFO (Last-In-First-Out) collection with fixed capacity of 8, 16, or 32 unmanaged elements.
 
 ## Overview
 
-`InlineStack32<T>` provides stack semantics with zero heap allocations. All 32 elements are stored inline within the struct. Push and Pop operations are O(1) and aggressively inlined for minimal call overhead.
+`InlineStack8<T>`, `InlineStack16<T>`, and `InlineStack32<T>` provide stack semantics with zero heap allocations. Elements are stored inline within the struct. Choose your size based on typical working set:
+- **InlineStack8**: Minimal overhead (~36 bytes), 8-element max
+- **InlineStack16**: Moderate overhead (~68 bytes), 16-element max
+- **InlineStack32**: Larger overhead (~132 bytes), 32-element max
+
+> **Caution:** Because elements are inline, the struct's size is `Capacity * sizeof(T)`.
+> Large element types raise stack pressure and may lead to `StackOverflowException`.
+> Consider passing by `ref`/`in` or using a smaller variant or heap collection.
+
+All sizes are `ref struct` types. Push and Pop operations are O(1) and aggressively inlined for minimal call overhead.
 
 **Key characteristics**:
-- Fixed capacity: exactly 32 elements
+- Fixed capacity: exactly 8, 16, or 32 elements (depending on variant)
 - Stack-allocated: no heap allocation
 - Ref struct: cannot be stored in classes or arrays
 - LIFO ordering: enumerator iterates in reverse (last pushed first)
@@ -16,12 +25,15 @@ A high-performance, stack-allocated LIFO (Last-In-First-Out) collection with a f
 ## Type signature
 
 ```csharp
-public ref struct InlineStack32<T> where T : unmanaged, IEquatable<T>
+public ref struct InlineStack8<T> where T : unmanaged, IEquatable<T>
 {
-    public const int Capacity = 32;
+    public const int Capacity = 8;
     public int Count { get; }
     // ... methods ...
 }
+
+// Similarly for InlineStack16<T> and InlineStack32<T>
+// with Capacity = 16 and 32 respectively
 ```
 
 ## API reference
@@ -30,11 +42,13 @@ public ref struct InlineStack32<T> where T : unmanaged, IEquatable<T>
 
 ```csharp
 // Default constructor: empty stack
-var stack = new InlineStack32<int>();
+var stack8 = new InlineStack8<int>();
+var stack16 = new InlineStack16<int>();
+var stack32 = new InlineStack32<int>();
 
 // No span-based constructor; use repeated Push instead
 for (int i = 0; i < 5; i++) {
-    stack.Push(i);
+    stack8.Push(i);
 }
 ```
 
@@ -243,29 +257,29 @@ Console.WriteLine($"{pt.X}, {pt.Y}");
 
 | Exception | Condition |
 |-----------|-----------|
-| `InvalidOperationException` | Push when Count == 32 |
+| `InvalidOperationException` | Push when Count == capacity (8, 16, or 32) |
 | `InvalidOperationException` | Pop when Count == 0 |
 | `InvalidOperationException` | Peek when Count == 0 |
 
 ## Limitations
 
-- **Fixed capacity**: Exactly 32 elements; exceeding throws
+- **Fixed capacity**: Exactly 8, 16, or 32 elements (depending on variant); exceeding throws
 - **Unmanaged types only**: `T : unmanaged, IEquatable<T>`
 - **No bounds checking on push/pop**: Unsafe methods assume callers verify state (or use Try- variants)
 - **Stack storage**: Cannot be stored in reference types or async contexts
-- **Value semantics**: Assignment and parameter passing copy the entire struct (up to 132 bytes)
+- **Value semantics**: Assignment and parameter passing copy the entire struct (36-132 bytes depending on size)
 
 ## Enumerator behavior
 
 The enumerator is a `ref struct` that iterates in **reverse order** (LIFO):
 
 ```csharp
-var stack = new InlineStack32<int>();
+var stack = new InlineStack8<int>();
 stack.Push(1);
 stack.Push(2);
 stack.Push(3);
 
-// foreach iterates: 3, 2, 1
+// foreach iterates: 3, 2, 1 (in LIFO order)
 foreach (var item in stack) {
     Console.WriteLine(item);  // 3, 2, 1
 }
@@ -280,16 +294,20 @@ var span = stack.AsSpan();
 
 ## Performance expectations
 
-- **Push/Pop**: Near-identical to stack frame allocation (single instruction)
+- **Push/Pop**: O(1), equivalent to array element assignment
 - **Indexer access**: No indexer; use AsSpan() if indexed access needed
 - **Memory**: 0 allocations vs 1 for Stack<T>
-- **Copy cost**: ~3ns for `InlineStack32<int>`
+- **Copy cost**: 
+  - `InlineStack8<int>`: ~1ns
+  - `InlineStack16<int>`: ~2ns
+  - `InlineStack32<int>`: ~3ns
 
 ## When to use
 
 - Depth-first traversal (trees, graphs)
 - Expression parsing (operator stack)
 - Undo/redo stacks in UI
+- Bounded-depth recursion (max 8-32 levels)
 - Function call stack simulation
 - Hot-path stack operations with fixed max depth
 

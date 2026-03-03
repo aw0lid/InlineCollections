@@ -7,11 +7,11 @@
 
 # ⚡ InlineCollections
 
-InlineCollections provides high-performance, zero-allocation collection primitives for .NET with a fixed capacity of 32 elements. The collections are implemented as `ref struct` types optimized for ultra-low latency scenarios where heap allocations must be eliminated.
+InlineCollections provides high-performance, zero-allocation collection primitives for .NET with fixed capacities of 8, 16, or 32 elements. The collections are implemented as `ref struct` types optimized for ultra-low latency scenarios where heap allocations must be eliminated.
 
 ## 🚀 Overview
 
-`InlineList32<T>`, `InlineStack32<T>`, and `InlineQueue32<T>` provide stack-allocated storage via the `InlineArray` language feature (C# 12+), enabling:
+InlineCollections provides **three collection types** (`InlineList<T>`, `InlineStack<T>`, `InlineQueue<T>`) in **three fixed sizes** (8, 16, and 32 elements), with stack-allocated storage via the `InlineArray` language feature (C# 12+), enabling:
 
 - ✨ Zero heap allocations for the fast path
 - 🏎️ Minimal GC pressure
@@ -23,6 +23,11 @@ InlineCollections provides high-performance, zero-allocation collection primitiv
 > [!IMPORTANT]
 > **Positioning Statement**: This library is **not a general-purpose replacement** for the standard BCL collections types. Standard collections are designed for flexibility and large datasets. `InlineCollections` are "surgical tools" designed for **High-Performance hot-paths** where the developer has a guaranteed bound on the number of elements (≤ 32) and must eliminate heap allocations to reduce GC pressure and latency.
 
+> Choose your collection size based on typical working set:
+> - **InlineList8/Stack8/Queue8**: Minimal overhead, ultra-low latency (≤ 8 elements)
+> - **InlineList16/Stack16/Queue16**: Balanced capacity and size (≤ 16 elements)
+> - **InlineList32/Stack32/Queue32**: Maximum capacity within stack budget (≤ 32 elements)
+
 ---
 
 ## 🛠️ Getting Started
@@ -32,7 +37,7 @@ InlineCollections provides high-performance, zero-allocation collection primitiv
 Add the package to your project via .NET CLI:
 
 ```bash
-dotnet add package InlineCollections --version 0.1.0
+dotnet add package InlineCollections --version 0.2.0
 ```
 
 ## 🚀 Quick Start & Usage
@@ -53,6 +58,9 @@ foreach (ref int item in list.AsSpan())
 {
     item += 1; 
 }
+// ⚠️ When using large value types as elements, be aware that every
+// pass-by-value of `list` copies the entire buffer (capacity * sizeof(T)).
+// Passing by `ref` or `in` can avoid excessive copying on the stack.
 ```
 
 ---
@@ -69,14 +77,14 @@ Standard .NET collections (`List<T>`, `Stack<T>`, `Queue<T>`) allocate on the he
 
 ---
 
-## ✅ When to use
+## When to use
 
-- ⚡ Hot-path code that creates many short-lived small collections
+- ⚡ Hot-path code that creates many short-lived small collections (≤ 32 elements)
 - ⏱️ Real-time systems requiring predictable latency
 - 🎮 Game engine frame-local processing (per-frame temporary buffers)
 - ⚡ Network packet processing and protocol parsing
 - 🔁 Serialization/deserialization buffers where allocations matter
-- 🧠 Stack-like or frame-local data with bounded depth
+- 🧠 Stack-like or frame-local data with bounded depth (8-32 elements)
 
 
 ## When NOT to use
@@ -86,6 +94,7 @@ Standard .NET collections (`List<T>`, `Stack<T>`, `Queue<T>`) allocate on the he
 - Reference-type or nullable element types
 - When API compatibility with `List<T>` is required
 - Managed heap scenarios where GC pressure is not a primary concern
+- Cases where collection size cannot be statically bounded
 
 ---
 
@@ -93,9 +102,9 @@ Standard .NET collections (`List<T>`, `Stack<T>`, `Queue<T>`) allocate on the he
 
 ### Memory model
 
-Each collection type uses the `InlineArray32<T>` struct, which leverages the `[InlineArray(32)]` attribute to embed 32 elements directly inside the struct. This is a value-type collection stored on the stack (when not captured in a reference type).
+Each collection type uses inline storage via the `InlineArray8<T>`, `InlineArray16<T>`, or `InlineArray32<T>` structs, which leverage the `[InlineArray(N)]` attribute to embed the specified number of elements directly inside the struct. This is a value-type collection stored on the stack (when not captured in a reference type).
 
-- Inline storage: 32 elements stored as struct fields
+- Inline storage: N elements stored as struct fields (where N ∈ {8, 16, 32})
 - No heap allocation
 - `ref struct` semantics (no boxing, no reference storage)
 
@@ -108,25 +117,28 @@ Each collection type uses the `InlineArray32<T>` struct, which leverages the `[I
 
 ## Collections provided
 
-### InlineList32<T>
+### InlineList8<T>, InlineList16<T>, InlineList32<T>
 
-A list with a maximum capacity of 32 unmanaged elements.
+A list with a maximum capacity of 8, 16, or 32 unmanaged elements respectively.
 
 **Key methods:**
 - `Add(T item)` — add to end; throws if full
 - `TryAdd(T item)` — add to end; returns false if full
 - `AddRange(ReadOnlySpan<T> items)` — bulk add
 - `Insert(int index, T item)` — insert at index
+- `TryInsert(int index, T item)` — insert at index; returns false if invalid or full
 - `Remove(T item)` — remove first occurrence
 - `RemoveAt(int index)` — remove by index
 - `T this[int index]` — indexer with ref return for in-place modification
 - `Span<T> AsSpan()` — get current elements as a span
 - `Contains(T item)` — linear search
 - `Clear()` — empty the list
+- `int Count` — get current element count
+- `const int Capacity` — fixed maximum capacity (8, 16, or 32)
 
 **Example:**
 ```csharp
-var list = new InlineList32<int>();
+var list = new InlineList16<int>();
 list.Add(1);
 list.Add(2);
 list.Add(3);
@@ -142,9 +154,9 @@ foreach (var item in list) {
 }
 ```
 
-### InlineStack32<T>
+### InlineStack8<T>, InlineStack16<T>, InlineStack32<T>
 
-LIFO (Last-In-First-Out) collection with maximum capacity of 32 elements.
+LIFO (Last-In-First-Out) collection with maximum capacity of 8, 16, or 32 elements.
 
 **Key methods:**
 - `Push(T item)` — push to stack; throws if full
@@ -154,10 +166,12 @@ LIFO (Last-In-First-Out) collection with maximum capacity of 32 elements.
 - `ref T Peek()` — return ref to top without removing; throws if empty
 - `Span<T> AsSpan()` — get all elements (in insertion order)
 - `Clear()` — empty the stack
+- `int Count` — get current element count
+- `const int Capacity` — fixed maximum capacity (8, 16, or 32)
 
 **Example:**
 ```csharp
-var stack = new InlineStack32<int>();
+var stack = new InlineStack16<int>();
 stack.Push(10);
 stack.Push(20);
 stack.Push(30);
@@ -173,9 +187,9 @@ foreach (var item in stack) {
 }
 ```
 
-### InlineQueue32<T>
+### InlineQueue8<T>, InlineQueue16<T>, InlineQueue32<T>
 
-FIFO (First-In-First-Out) collection with maximum capacity of 32 elements. Internally uses a circular buffer for O(1) enqueue/dequeue.
+FIFO (First-In-First-Out) collection with maximum capacity of 8, 16, or 32 elements. Internally uses a circular buffer for O(1) enqueue/dequeue.
 
 **Key methods:**
 - `Enqueue(T item)` — add to back; throws if full
@@ -184,10 +198,12 @@ FIFO (First-In-First-Out) collection with maximum capacity of 32 elements. Inter
 - `bool TryDequeue(out T result)` — dequeue safely
 - `ref T Peek()` — return ref to front without removing; throws if empty
 - `Clear()` — empty the queue
+- `int Count` — get current element count
+- `const int Capacity` — fixed maximum capacity (8, 16, or 32)
 
 **Example:**
 ```csharp
-var queue = new InlineQueue32<int>();
+var queue = new InlineQueue16<int>();
 queue.Enqueue(1);
 queue.Enqueue(2);
 queue.Enqueue(3);
@@ -205,10 +221,13 @@ foreach (var item in queue) {
 
 ## Limitations and exceptions
 
-- **Fixed capacity**: Exactly 32 elements; exceeding capacity throws `InvalidOperationException`.
+- **Fixed capacity**: Exactly 8, 16, or 32 elements depending on collection variant; exceeding capacity throws `InvalidOperationException`.
 - **Unmanaged types only**: `T` must satisfy `T : unmanaged, IEquatable<T>`.
 - **Value semantics**: Assignment and parameter passing copy the entire struct.
-- **Struct size**: Each collection is 32 * sizeof(T) bytes plus overhead. Large `T` types increase stack usage.
+- **Struct size**: Each collection is (capacity * sizeof(T)) bytes plus overhead. For example:
+  - `InlineList8<int>`: 32 bytes + 4 bytes (count) = 36 bytes
+  - `InlineList32<int>`: 128 bytes + 4 bytes (count) = 132 bytes
+- ⚠️ **Stack memory warning**: Because storage is inline, using a large unmanaged element type can push the struct's stack footprint high, potentially leading to significant stack pressure or a `StackOverflowException`. Consider using smaller size variants, heap-based collections, or passing the struct by `ref`/`in` to avoid costly copies.
 - **ref struct**: Cannot be stored in fields of reference types or classes; cannot be boxed.
 - **No null elements**: Elements must be valid unmanaged values.
 - **Exceptions**:
@@ -303,5 +322,3 @@ See [docs/benchmarks.md](docs/benchmarks.md) for full results.
 - ✅ 0 branches in hot loops
 - ✅ Faster indexing
 - ❌ Caller must ensure valid indices (in practice, usually guaranteed)
-
-

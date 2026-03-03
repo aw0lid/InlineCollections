@@ -1,7 +1,7 @@
-using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using InlineCollections.CoreLogic;
+using InlineCollections.Enumeration;
 
 namespace InlineCollections
 {
@@ -9,6 +9,12 @@ namespace InlineCollections
     /// Provides a high-performance, stack-allocated Stack with a fixed capacity of 32 elements.
     /// Eliminates heap allocations and reduces GC pressure.
     /// </summary>
+    /// <remarks>
+    /// Because elements are stored inline, the struct size is <c>Capacity * sizeof(T)</c>.
+    /// Using a large unmanaged <c>T</c> can generate significant stack pressure and may
+    /// trigger a <see cref="StackOverflowException"/>. Pass by <c>ref</c> or <c>in</c> to
+    /// minimize copies, or pick a smaller variant or another collection for large types.
+    /// </remarks>
     /// <typeparam name="T">The type of unmanaged elements in the stack.</typeparam>
     [SkipLocalsInit]
     [StructLayout(LayoutKind.Sequential)]
@@ -28,6 +34,11 @@ namespace InlineCollections
         public readonly int Count => _count;
 
         /// <summary>
+        /// Returns an enumerator for the <see cref="InlineStack32{T}"/>.
+        /// </summary>
+        public StackEnumerator<T> GetEnumerator() => new(AsSpan(), _count);
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="InlineStack32{T}"/> struct.
         /// </summary>
         public InlineStack32()
@@ -44,9 +55,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Push(T item)
         {
-            if ((uint)_count >= Capacity) ThrowFull();
-            // Direct memory access for peak performance
-            Unsafe.Add(ref _buffer[0], _count++) = item;
+            InlineStackCore.Push(in item, _buffer, ref _count);
         }
 
         /// <summary>
@@ -57,8 +66,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T Pop()
         {
-            if ((uint)_count == 0) ThrowEmpty();
-            return Unsafe.Add(ref _buffer[0], --_count);
+            return InlineStackCore.Pop<T>(_buffer, ref _count);
         }
 
         /// <summary>
@@ -69,8 +77,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly ref T Peek()
         {
-            if (_count == 0) ThrowEmpty();
-            return ref Unsafe.Add(ref Unsafe.AsRef(in _buffer[0]), _count - 1);
+            return ref InlineStackCore.Peek<T>(this.AsSpan(), _count);
         }
 
         /// <summary>
@@ -80,9 +87,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPush(T item)
         {
-            if ((uint)_count >= Capacity) return false;
-            Unsafe.Add(ref _buffer[0], _count++) = item;
-            return true;
+            return InlineStackCore.TryPush(in item, _buffer, ref _count);
         }
 
         /// <summary>
@@ -93,13 +98,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPop(out T result)
         {
-            if (_count == 0)
-            {
-                result = default;
-                return false;
-            }
-            result = Unsafe.Add(ref _buffer[0], --_count);
-            return true;
+            return InlineStackCore.TryPop(_buffer, ref _count, out result);
         }
 
         /// <summary>
@@ -113,36 +112,5 @@ namespace InlineCollections
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly Span<T> AsSpan() => MemoryMarshal.CreateSpan(ref Unsafe.AsRef(in _buffer[0]), _count);
-
-        /// <summary>
-        /// Returns an enumerator for the <see cref="InlineStack32{T}"/>.
-        /// </summary>
-        public Enumerator GetEnumerator() => new(AsSpan());
-
-        /// <summary>
-        /// Enumerates the elements of an <see cref="InlineStack32{T}"/>.
-        /// </summary>
-        public ref struct Enumerator
-        {
-            private readonly Span<T> _span;
-            private int _index;
-
-            internal Enumerator(Span<T> span)
-            {
-                _span = span;
-                _index = span.Length;
-            }
-
-            public readonly ref T Current => ref _span[_index];
-
-            [MethodImpl(MethodImplOptions.AggressiveInlining)]
-            public bool MoveNext() => --_index >= 0;
-        }
-
-        [DoesNotReturn]
-        private static void ThrowFull() => throw new InvalidOperationException("Stack Full");
-
-        [DoesNotReturn]
-        private static void ThrowEmpty() => throw new InvalidOperationException("Stack Empty");
     }
 }

@@ -1,22 +1,21 @@
 using System;
 using Xunit;
-using InlineCollections;
 
 namespace InlineCollections.Tests
 {
-    public class InlineQueue32Tests
+    public class InlineQueue16Tests
     {
         [Fact]
         public void Constructor_InitializesEmptyQueue()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             Assert.Equal(0, queue.Count);
         }
 
         [Fact]
         public void Enqueue_SingleItem_Succeeds()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             queue.Enqueue(42);
             Assert.Equal(1, queue.Count);
         }
@@ -24,13 +23,13 @@ namespace InlineCollections.Tests
         [Fact]
         public void Enqueue_MultipleItems_AllSucceed()
         {
-            var queue = new InlineQueue32<int>();
-            for (int i = 0; i < 32; i++)
+            var queue = new InlineQueue16<int>();
+            for (int i = 0; i < 16; i++)
             {
                 queue.Enqueue(i);
             }
 
-            Assert.Equal(32, queue.Count);
+            Assert.Equal(16, queue.Count);
         }
 
 
@@ -38,8 +37,8 @@ namespace InlineCollections.Tests
         [Fact]
         public void TryEnqueue_FullQueue_DoesNotModifyState()
         {
-            var queue = new InlineQueue32<int>();
-            for (int i = 0; i < 32; i++) queue.TryEnqueue(i);
+            var queue = new InlineQueue16<int>();
+            for (int i = 0; i < 16; i++) queue.TryEnqueue(i);
 
             int countBefore = queue.Count;
             bool result = queue.TryEnqueue(999);
@@ -52,7 +51,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Dequeue_ReturnFirstEnqueuedItem()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             queue.Enqueue(1);
             queue.Enqueue(2);
             queue.Enqueue(3);
@@ -67,7 +66,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Dequeue_DecreasesCount()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             queue.Enqueue(1);
             queue.Enqueue(2);
 
@@ -78,8 +77,8 @@ namespace InlineCollections.Tests
         [Fact]
         public void Enqueue_FullQueue_ThrowsInvalidOperationException()
         {
-            var queue = new InlineQueue32<int>();
-            for (int i = 0; i < 32; i++) queue.Enqueue(i);
+            var queue = new InlineQueue16<int>();
+            for (int i = 0; i < 16; i++) queue.Enqueue(i);
 
             bool threw = false;
             try
@@ -96,7 +95,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Dequeue_EmptyQueue_ThrowsInvalidOperationException()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
 
             bool threw = false;
             try
@@ -111,55 +110,16 @@ namespace InlineCollections.Tests
         }
 
         [Fact]
-        public void Peek_EmptyQueue_ThrowsInvalidOperationException()
-        {
-            var queue = new InlineQueue32<int>();
-
-            bool threw = false;
-            try
-            {
-                _ = queue.Peek();
-            }
-            catch (InvalidOperationException)
-            {
-                threw = true;
-            }
-            Assert.True(threw, "Peek must throw InvalidOperationException when empty.");
-        }
-
-        [Fact]
-        public void TryDequeue_EmptyQueue_ReturnsFalseAndDefault()
-        {
-            var queue = new InlineQueue32<int>();
-            bool success = queue.TryDequeue(out int result);
-
-            Assert.False(success);
-            Assert.Equal(0, result);
-        }
-
-        [Fact]
-        public void TryDequeue_CorrectlyUpdatesCount_AtBoundaries()
-        {
-            var queue = new InlineQueue32<int>();
-            queue.Enqueue(1);
-
-            Assert.True(queue.TryDequeue(out _));
-            Assert.Equal(0, queue.Count);
-            Assert.False(queue.TryDequeue(out _));
-        }
-
-        [Fact]
         public void Peek_ReturnsFirstWithoutRemoving()
         {
             var queue = new InlineQueue32<int>();
             queue.Enqueue(42);
 
-            ref var first = ref queue.Peek();
+            ref int first = ref queue.Peek();
+
             Assert.Equal(42, first);
             Assert.Equal(1, queue.Count);
         }
-
-
 
         [Fact]
         public void Peek_AllowsModification()
@@ -174,9 +134,43 @@ namespace InlineCollections.Tests
         }
 
         [Fact]
-        public void Clear_RemovesAllItems()
+        public void Peek_EmptyQueue_ThrowsInvalidOperationException()
         {
             var queue = new InlineQueue32<int>();
+
+            bool threw = false;
+
+            try { ref int _ = ref queue.Peek(); }
+            catch (InvalidOperationException) { threw = true; }
+
+            Assert.True(threw, "Peek must throw InvalidOperationException when empty.");
+        }
+
+        [Fact]
+        public void TryDequeue_EmptyQueue_ReturnsFalseAndDefault()
+        {
+            var queue = new InlineQueue16<int>();
+            bool success = queue.TryDequeue(out int result);
+
+            Assert.False(success);
+            Assert.Equal(0, result);
+        }
+
+        [Fact]
+        public void TryDequeue_CorrectlyUpdatesCount_AtBoundaries()
+        {
+            var queue = new InlineQueue16<int>();
+            queue.Enqueue(1);
+
+            Assert.True(queue.TryDequeue(out _));
+            Assert.Equal(0, queue.Count);
+            Assert.False(queue.TryDequeue(out _));
+        }
+
+        [Fact]
+        public void Clear_RemovesAllItems()
+        {
+            var queue = new InlineQueue16<int>();
             queue.Enqueue(1);
             queue.Enqueue(2);
             queue.Enqueue(3);
@@ -188,7 +182,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void FIFO_Semantics()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             queue.Enqueue(100);
             queue.Enqueue(200);
             queue.Enqueue(300);
@@ -201,25 +195,25 @@ namespace InlineCollections.Tests
         [Fact]
         public void WrapAround_EnqueueAfterDequeue()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
 
-            for (int i = 0; i < 32; i++) queue.Enqueue(i);
-            for (int i = 0; i < 16; i++) queue.Dequeue();
-            for (int i = 32; i < 48; i++) queue.Enqueue(i);
+            for (int i = 0; i < 16; i++) queue.Enqueue(i);
+            for (int i = 0; i < 8; i++) queue.Dequeue();
+            for (int i = 16; i < 24; i++) queue.Enqueue(i);
 
-            Assert.Equal(32, queue.Count);
+            Assert.Equal(16, queue.Count);
         }
 
         [Fact]
-        public void Capacity_IsAlways32()
+        public void Capacity_IsAlways16()
         {
-            Assert.Equal(32, InlineQueue32<int>.Capacity);
+            Assert.Equal(16, InlineQueue16<int>.Capacity);
         }
 
         [Fact]
         public void Queue_InfiniteCycle_StressTest()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
 
             for (int i = 0; i < 1000; i++)
             {
@@ -234,28 +228,28 @@ namespace InlineCollections.Tests
         [Fact]
         public void Clear_AfterWrapAround_ResetsPointers()
         {
-            var queue = new InlineQueue32<int>();
-            for (int i = 0; i < 20; i++) queue.Enqueue(i);
-            for (int i = 0; i < 10; i++) queue.Dequeue();
+            var queue = new InlineQueue16<int>();
+            for (int i = 0; i < 10; i++) queue.Enqueue(i);
+            for (int i = 0; i < 5; i++) queue.Dequeue();
 
             queue.Clear();
             Assert.Equal(0, queue.Count);
 
-            for (int i = 0; i < 32; i++) queue.Enqueue(i);
-            Assert.Equal(32, queue.Count);
+            for (int i = 0; i < 16; i++) queue.Enqueue(i);
+            Assert.Equal(16, queue.Count);
         }
 
         [Fact]
         public void Fill_Empty_Fill_VerifiesFullCapacity()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
 
-            for (int i = 0; i < 32; i++) queue.Enqueue(i);
-            Assert.Equal(32, queue.Count);
-            for (int i = 0; i < 32; i++) queue.Dequeue();
+            for (int i = 0; i < 16; i++) queue.Enqueue(i);
+            Assert.Equal(16, queue.Count);
+            for (int i = 0; i < 16; i++) queue.Dequeue();
 
-            for (int i = 0; i < 32; i++) queue.Enqueue(i + 100);
-            Assert.Equal(32, queue.Count);
+            for (int i = 0; i < 16; i++) queue.Enqueue(i + 100);
+            Assert.Equal(16, queue.Count);
             Assert.Equal(100, queue.Peek());
         }
 
@@ -264,13 +258,13 @@ namespace InlineCollections.Tests
         [Fact]
         public void GetEnumerator_HandlesWrapAroundCorrectly()
         {
-            var queue = new InlineQueue32<int>();
-            for (int i = 0; i < 20; i++) queue.Enqueue(i);
-            for (int i = 0; i < 15; i++) queue.Dequeue();
-            for (int i = 20; i < 30; i++) queue.Enqueue(i);
+            var queue = new InlineQueue16<int>();
+            for (int i = 0; i < 12; i++) queue.Enqueue(i);
+            for (int i = 0; i < 8; i++) queue.Dequeue();
+            for (int i = 12; i < 18; i++) queue.TryEnqueue(i);
 
 
-            int expectedCount = 15;
+            int expectedCount = 10;
             int actualCount = 0;
             foreach (var item in queue)
             {
@@ -282,25 +276,25 @@ namespace InlineCollections.Tests
         [Fact]
         public void GetEnumerator_IteratesInCorrectOrder_AfterWrapAround()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
 
-            for (int i = 1; i <= 20; i++) queue.Enqueue(i);
-            for (int i = 0; i < 10; i++) queue.Dequeue();
-            for (int i = 21; i <= 30; i++) queue.Enqueue(i);
+            for (int i = 1; i <= 12; i++) queue.Enqueue(i);
+            for (int i = 0; i < 6; i++) queue.Dequeue();
+            for (int i = 13; i <= 20; i++) queue.Enqueue(i);
 
-            int expectedValue = 11;
+            int expectedValue = 7;
             foreach (var item in queue)
             {
                 Assert.Equal(expectedValue, item);
                 expectedValue++;
             }
-            Assert.Equal(31, expectedValue);
+            Assert.Equal(21, expectedValue);
         }
 
         [Fact]
         public void Enumerator_AfterFullCycle_ReturnsCorrectData()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             for (int i = 0; i < 100; i++)
             {
                 queue.Enqueue(i);
@@ -312,7 +306,5 @@ namespace InlineCollections.Tests
             Assert.True(enumerator.MoveNext());
             Assert.Equal(999, enumerator.Current);
         }
-
-
     }
 }

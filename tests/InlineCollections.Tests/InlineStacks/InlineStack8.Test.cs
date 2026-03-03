@@ -1,22 +1,21 @@
 using System;
 using Xunit;
-using InlineCollections;
 
 namespace InlineCollections.Tests
 {
-    public class InlineStack32Tests
+    public class InlineStack8Tests
     {
         [Fact]
         public void Constructor_InitializesEmptyStack()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             Assert.Equal(0, stack.Count);
         }
 
         [Fact]
         public void Push_SingleItem_Succeeds()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(42);
             Assert.Equal(1, stack.Count);
         }
@@ -24,13 +23,13 @@ namespace InlineCollections.Tests
         [Fact]
         public void Push_MultipleItems_AllSucceed()
         {
-            var stack = new InlineStack32<int>();
-            for (int i = 0; i < 32; i++)
+            var stack = new InlineStack8<int>();
+            for (int i = 0; i < 8; i++)
             {
                 stack.Push(i);
             }
 
-            Assert.Equal(32, stack.Count);
+            Assert.Equal(8, stack.Count);
         }
 
 
@@ -38,7 +37,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void TryPush_WithinCapacity_ReturnsTrue()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             bool result = stack.TryPush(42);
             Assert.True(result);
         }
@@ -46,8 +45,8 @@ namespace InlineCollections.Tests
         [Fact]
         public void TryPush_ExceedCapacity_ReturnsFalse()
         {
-            var stack = new InlineStack32<int>();
-            for (int i = 0; i < 32; i++) stack.TryPush(i);
+            var stack = new InlineStack8<int>();
+            for (int i = 0; i < 8; i++) stack.TryPush(i);
 
             bool result = stack.TryPush(999);
             Assert.False(result);
@@ -56,7 +55,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Pop_ReturnsLastPushedItem()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(1);
             stack.Push(2);
             stack.Push(3);
@@ -71,7 +70,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Pop_DecreasesCount()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(1);
             stack.Push(2);
 
@@ -82,8 +81,8 @@ namespace InlineCollections.Tests
         [Fact]
         public void Push_ExceedCapacity_ThrowsInvalidOperationException()
         {
-            var stack = new InlineStack32<int>();
-            for (int i = 0; i < 32; i++) stack.Push(i);
+            var stack = new InlineStack8<int>();
+            for (int i = 0; i < 8; i++) stack.Push(i);
 
             bool threw = false;
             try { stack.Push(999); }
@@ -94,7 +93,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Pop_EmptyStack_ThrowsInvalidOperationException()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             bool threw = false;
             try { stack.Pop(); }
             catch (InvalidOperationException) { threw = true; }
@@ -102,19 +101,9 @@ namespace InlineCollections.Tests
         }
 
         [Fact]
-        public void Peek_EmptyStack_ThrowsInvalidOperationException_ManualCheck()
-        {
-            var stack = new InlineStack32<int>();
-            bool threw = false;
-            try { _ = stack.Peek(); }
-            catch (InvalidOperationException) { threw = true; }
-            Assert.True(threw);
-        }
-
-        [Fact]
         public void TryPop_WithItems_ReturnsTrueAndValue()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(42);
 
             bool result = stack.TryPop(out int value);
@@ -125,7 +114,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void TryPop_OnEmptyStack_DoesNotUnderflowCount()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             bool result = stack.TryPop(out _);
 
             Assert.False(result);
@@ -135,7 +124,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void TryPop_EmptyStack_ReturnsFalse()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             bool result = stack.TryPop(out int value);
 
             Assert.False(result);
@@ -143,34 +132,9 @@ namespace InlineCollections.Tests
         }
 
         [Fact]
-        public void Peek_ReturnsTopWithoutRemoving()
-        {
-            var stack = new InlineStack32<int>();
-            stack.Push(42);
-
-            ref var top = ref stack.Peek();
-            Assert.Equal(42, top);
-            Assert.Equal(1, stack.Count);
-        }
-
-
-
-        [Fact]
-        public void Peek_AllowsModification()
-        {
-            var stack = new InlineStack32<int>();
-            stack.Push(10);
-
-            ref var top = ref stack.Peek();
-            top = 20;
-
-            Assert.Equal(20, stack.Pop());
-        }
-
-        [Fact]
         public void Clear_RemovesAllItems()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(1);
             stack.Push(2);
             stack.Push(3);
@@ -182,14 +146,13 @@ namespace InlineCollections.Tests
         [Fact]
         public void AsSpan_ReturnsValidSpan()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(1);
             stack.Push(2);
             stack.Push(3);
 
             var span = stack.AsSpan();
             Assert.Equal(3, span.Length);
-            // ترتيب الـ Span بيعتمد على الـ Internal Array
             Assert.Equal(1, span[0]);
             Assert.Equal(2, span[1]);
             Assert.Equal(3, span[2]);
@@ -198,7 +161,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void GetEnumerator_IteratesAllElements()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(1);
             stack.Push(2);
             stack.Push(3);
@@ -215,7 +178,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void LIFO_Semantics()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(10);
             stack.Push(20);
             stack.Push(30);
@@ -226,9 +189,46 @@ namespace InlineCollections.Tests
         }
 
         [Fact]
-        public void Capacity_IsAlways32()
+        public void Capacity_IsAlways8()
         {
-            Assert.Equal(32, InlineStack32<int>.Capacity);
+            Assert.Equal(8, InlineStack8<int>.Capacity);
+        }
+
+        [Fact]
+        public void Peek_ReturnsTopWithoutRemoving()
+        {
+            var stack = new InlineStack32<int>();
+            stack.Push(42);
+
+            ref int top = ref stack.Peek();
+
+            Assert.Equal(42, top);
+            Assert.Equal(1, stack.Count);
+        }
+
+        [Fact]
+        public void Peek_AllowsModification()
+        {
+            var stack = new InlineStack32<int>();
+            stack.Push(10);
+
+
+            ref var top = ref stack.Peek();
+            top = 20;
+
+            Assert.Equal(20, stack.Pop());
+        }
+
+        [Fact]
+        public void Peek_EmptyStack_ThrowsInvalidOperationException_ManualCheck()
+        {
+            var stack = new InlineStack32<int>();
+            bool threw = false;
+
+            try { ref int _ = ref stack.Peek(); }
+            catch (InvalidOperationException) { threw = true; }
+
+            Assert.True(threw, "Peek should throw InvalidOperationException when stack is empty.");
         }
 
         [Fact]
@@ -238,6 +238,7 @@ namespace InlineCollections.Tests
             stack.Push(100);
 
             ref int top = ref stack.Peek();
+
             top = 500;
 
             Assert.Equal(500, stack.Pop());
@@ -246,7 +247,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void PushPop_StressTest_1000Cycles()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             for (int i = 0; i < 1000; i++)
             {
                 stack.Push(i);
@@ -281,7 +282,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Stack_HandlesCustomStructs_Correctly()
         {
-            var stack = new InlineStack32<TestPoint>();
+            var stack = new InlineStack8<TestPoint>();
             var p1 = new TestPoint { X = 1, Y = 2 };
             var p2 = new TestPoint { X = 10, Y = 20 };
 
@@ -297,7 +298,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void GetEnumerator_EmptyStack_NeverIterates()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             int iterations = 0;
             foreach (var item in stack)
             {
@@ -309,7 +310,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void AsSpan_Modification_ReflectsInStack()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(1);
             stack.Push(2);
 
@@ -323,7 +324,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void GetEnumerator_ReturnsItemsInReverseOrder()
         {
-            var stack = new InlineStack32<int>();
+            var stack = new InlineStack8<int>();
             stack.Push(1);
             stack.Push(2);
             stack.Push(3);
@@ -339,15 +340,15 @@ namespace InlineCollections.Tests
         [Fact]
         public void FullStack_Operations_AtBoundary()
         {
-            var stack = new InlineStack32<int>();
-            for (int i = 0; i < 32; i++) stack.Push(i);
+            var stack = new InlineStack8<int>();
+            for (int i = 0; i < 8; i++) stack.Push(i);
 
-            Assert.Equal(32, stack.Count);
-            Assert.Equal(32, stack.AsSpan().Length);
-            Assert.Equal(31, stack.Peek());
+            Assert.Equal(8, stack.Count);
+            Assert.Equal(8, stack.AsSpan().Length);
+            Assert.Equal(7, stack.Peek());
 
-            Assert.Equal(31, stack.Pop());
-            Assert.Equal(31, stack.Count);
+            Assert.Equal(7, stack.Pop());
+            Assert.Equal(7, stack.Count);
         }
 
 
@@ -362,7 +363,7 @@ namespace InlineCollections.Tests
         [Fact]
         public void Stack_HandlesOddSizedStructs_WithoutCorruption()
         {
-            var stack = new InlineStack32<OddSizeStruct>();
+            var stack = new InlineStack8<OddSizeStruct>();
             var item1 = new OddSizeStruct { A = 100, B = 1 };
             var item2 = new OddSizeStruct { A = 200, B = 0 };
 

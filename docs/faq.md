@@ -10,17 +10,29 @@
 
 **A**: No. InlineCollections are specialized for hot-path scenarios with small, bounded collections (≤ 32 elements). They are **not** drop-in replacements. Use `List<T>` by default; only adopt InlineCollections after profiling shows allocation is a bottleneck.
 
-### Q: Why exactly 32 elements?
+### Q: Why three sizes (8, 16, and 32)?
+
+**A**: Trade-offs between capacity and memory usage:
+1. **InlineList8**: ~36 bytes, minimal stack usage, 8-element max
+2. **InlineList16**: ~68 bytes, moderate stack usage, 16-element max
+3. **InlineList32**: ~132 bytes, larger stack usage, 32-element max
+
+Choose based on your actual capacity needs:
+- Small, fixed-size header parsing → `InlineList8`
+- Moderate buffers, frame-local lists → `InlineList16`
+- Large messages, bulk operations → `InlineList32`
+
+### Q: Why exactly those capacity numbers?
 
 **A**: Several reasons:
 1. **Cache efficiency**: 32 int64s = 256 bytes ≈ 4 cache lines (typical prefetch range)
-2. **Stack reasonable**: ~130 bytes per collection (int-sized)
-3. **Power of 2**: Enables fast circular buffer wrap-around in `InlineQueue32` (bitwise AND vs modulo)
+2. **Stack reasonable**: 32-element variant uses ~130 bytes (manageable on typical stacks)
+3. **Power of 2**: Enables fast circular buffer wrap-around in queues (bitwise AND vs modulo)
 4. **Practical**: Fits most bounded scenarios (message headers, frame-local state, etc.)
 
 ### Q: What happens when I exceed capacity?
 
-**A**: `InvalidOperationException` is thrown immediately. No silent failure, no degradation to heap-backed storage. This is intentional: if you're exceeding 32 elements, you should use `List<T>` instead.
+**A**: `InvalidOperationException` is thrown immediately. No silent failure, no degradation to heap-backed storage. This is intentional: if you're exceeding your chosen capacity, you should use `List<T>` instead.
 
 ## Type constraints
 
@@ -78,10 +90,12 @@ var list = new List<int?>();
 
 ### Q: What's the memory copy cost?
 
-**A**: Depends on element type:
+**A**: Depends on element type and collection size:
 
-| Type | Struct size | Copy time |
+| Type | Struct size | Copy time (approx) |
 |------|------------|-----------|
+| InlineList8<int> | 36B | ~1ns |
+| InlineList16<int> | 68B | ~2ns |
 | InlineList32<int> | 132B | ~3ns |
 | InlineList32<long> | 260B | ~6ns |
 | InlineStack32<Guid> | 516B | ~12ns |
@@ -278,6 +292,19 @@ if (!list.TryAdd(value)) {
 }
 ```
 
+### Q: Can the inline storage cause stack overflows or slowdowns?
+
+**A**: Yes. Each instance reserves `Capacity * sizeof(T)` bytes on the stack.
+Large unmanaged element types increase the struct size; copying the struct by
+value in deep call chains may cause **significant stack pressure** and even
+raise a `StackOverflowException`. To mitigate this:
+
+- Pass collections by `ref` or `in` in method signatures.
+- Choose a smaller size variant (8 or 16) when element types are large.
+- For very large elements or unpredictable sizes, use heap-based collections
+  like `List<T>` instead.
+
+This trade‑off is why the library is most useful with small, simple value types.
 ## Documentation and support
 
 ### Q: Where's more documentation?

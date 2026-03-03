@@ -4,7 +4,13 @@ This document describes the technical design and memory layout of InlineCollecti
 
 ## System overview
 
-InlineCollections provides three collection types: `InlineList32<T>`, `InlineStack32<T>`, and `InlineQueue32<T>`. All are `ref struct` types backed by inline storage using the `InlineArray32<T>` helper struct.
+InlineCollections provides three collection types in three fixed sizes:
+
+**Collection Types**: `InlineList<T>`, `InlineStack<T>`, `InlineQueue<T>`
+
+**Fixed Sizes**: 8, 16, and 32 elements
+
+All are `ref struct` types backed by inline storage using the corresponding `InlineArray<T>` helper struct (`InlineArray8<T>`, `InlineArray16<T>`, or `InlineArray32<T>`).
 
 ---
 
@@ -13,58 +19,74 @@ InlineCollections provides three collection types: `InlineList32<T>`, `InlineSta
 
 ---
 
-## Core design: InlineArray32<T>
+## Core design: InlineArray<T> (8, 16, 32)
 
 ```csharp
+[InlineArray(8)]
+internal struct InlineArray8<T> where T : unmanaged, IEquatable<T> 
+{ 
+    private T _element0; 
+}
+
+[InlineArray(16)]
+internal struct InlineArray16<T> where T : unmanaged, IEquatable<T> 
+{ 
+    private T _element0; 
+}
+
 [InlineArray(32)]
-internal struct InlineArray32<T> {
-    private T _element0;
+internal struct InlineArray32<T> where T : unmanaged, IEquatable<T> 
+{ 
+    private T _element0; 
 }
 ```
 
-The `InlineArray32<T>` struct uses the C# 12+ `[InlineArray(32)]` attribute to embed 32 contiguous elements directly in the struct. This means when you create an `InlineList32<int>`, the struct contains 32 integers inline—no separate heap allocation.
+The `InlineArray<T>` structs use the C# 12+ `[InlineArray(N)]` attribute to embed N contiguous elements directly in the struct. This means when you create an `InlineList8<int>`, the struct contains 8 integers inline—no separate heap allocation. The choice of size (8, 16, or 32) allows developers to optimize for their specific capacity needs and memory constraints.
 
 ## Memory layout
 
-### InlineList32<T>
+Each size variant has similar structure, with the buffer size varying:
+
+### InlineList<T> (sizes 8, 16, 32)
 
 ```
-Offset  Size     Field
-------  --------  -----
-0       32*sz(T)  _buffer (InlineArray32<T>)
-32*sz(T) 4        _count (int)
+Offset     Size       Field
+------     --------   -----
+0          N*sz(T)    _buffer (InlineArray[8/16/32]<T>)
+N*sz(T)    4          _count (int)
 ```
 
-- `_buffer`: fixed array of 32 elements
-- `_count`: current element count (0 to 32)
+- `_buffer`: fixed array of N elements (N ∈ {8, 16, 32})
+- `_count`: current element count (0 to N)
 
-**Total size**: `32 * sizeof(T) + 4` bytes, usually padded to alignment boundary.
+**Example sizes**:
+- `InlineList8<int>`: 8*4 + 4 = 36 bytes
+- `InlineList16<int>`: 16*4 + 4 = 68 bytes
+- `InlineList32<int>`: 32*4 + 4 = 132 bytes
 
-### InlineStack32<T>
-
-```
-Offset  Size     Field
-------  --------  -----
-0       32*sz(T)  _buffer (InlineArray32<T>)
-32*sz(T) 4        _count (int)
-```
+### InlineStack<T> (sizes 8, 16, 32)
 
 Identical layout to InlineList; the difference is semantic (LIFO vs indexed).
 
-### InlineQueue32<T>
+### InlineQueue<T> (sizes 8, 16, 32)
 
 ```
-Offset  Size     Field
-------  --------  -----
-0       32*sz(T)  _buffer (InlineArray32<T>)
-32*sz(T) 4        _head (int)
-32*sz(T)+4  4    _tail (int)
-32*sz(T)+8  4    _count (int)
+Offset      Size       Field
+------      --------   -----
+0           N*sz(T)    _buffer (InlineArray[8/16/32]<T>)
+N*sz(T)     4          _head (int)
+N*sz(T)+4   4          _tail (int)
+N*sz(T)+8   4          _count (int)
 ```
 
-- `_head`: index of the front element (circular)
-- `_tail`: index of the next insertion slot (circular)
+- `_head`: index of the front element (circular, wraps at N)
+- `_tail`: index of the next insertion slot (circular, wraps at N)
 - `_count`: current element count
+
+**Example sizes**:
+- `InlineQueue8<int>`: 8*4 + 3*4 = 44 bytes
+- `InlineQueue16<int>`: 16*4 + 3*4 = 76 bytes
+- `InlineQueue32<int>`: 32*4 + 3*4 = 140 bytes
 
 The circular buffer uses bitwise AND with `Mask = 31` to wrap indices.
 

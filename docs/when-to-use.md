@@ -1,6 +1,6 @@
 # When to Use InlineCollections
 
-Use InlineCollections when you have verified allocation or latency constraints in hot-path code and need collections with fixed, bounded capacity up to 32 elements.
+Use InlineCollections when you have verified allocation or latency constraints in hot-path code and need collections with fixed, bounded capacity (8, 16, or 32 elements).
 
 ## Ideal scenarios
 
@@ -9,24 +9,24 @@ Use InlineCollections when you have verified allocation or latency constraints i
 Networks and messaging systems create many short-lived collections. Example: parsing network packets.
 
 ```csharp
-// Hot-path packet header parsing
-var header = new InlineList32<byte>();
-while (stream.TryRead(buffer, out _) && header.Count < 32) {
-    header.Add(buffer[0]);
+// Hot-path packet header parsing (8 bytes)
+var header = new InlineList8<byte>();
+for (int i = 0; i < 8 && stream.TryRead(out byte b); i++) {
+    header.Add(b);
 }
 
 ref byte magic = ref header[0];
 if (magic != ExpectedMagic) throw new InvalidOperationException();
 ```
 
-**Why**: Each packet creates a collection; eliminating allocation saves 10-20% overhead.
+**Why**: Each packet creates a collection; eliminating allocation saves 10-20% overhead. Choose `InlineList8` for small fixed-size headers, `InlineList16` for medium, `InlineList32` for larger payloads.
 
 ### 2. Game engine per-frame processing
 
 Collect entities, particles, or effects within frame boundaries.
 
 ```csharp
-// Frame-local entity list
+// Frame-local entity list (up to 32 visible entities)
 var activeEntities = new InlineList32<Entity>();
 foreach (var entity in AllEntities) {
     if (entity.IsActive && entity.IsVisible) {
@@ -51,10 +51,10 @@ activeEntities.Clear();  // Ready for next frame
 Convert between formats with bounded intermediate storage.
 
 ```csharp
-// Parse compact message format
-var fields = new InlineList32<Field>();
+// Parse compact message format (max 16 fields)
+var fields = new InlineList16<Field>();
 byte* p = buffer;
-while (*p != EndMarker && fields.Count < 32) {
+while (*p != EndMarker && fields.Count < 16) {
     fields.Add(ParseField(ref p));
 }
 
@@ -71,7 +71,7 @@ foreach (ref Field field in fields.AsSpan()) {
 Audio processing, robotics, financial trading: predictable latency required.
 
 ```csharp
-// Audio sample collection in fixed-size chunks
+// Audio sample collection in fixed-size chunks (32 samples)
 var chunk = new InlineStack32<float>();
 while (chunk.Count < 32 && inputStream.TryRead(out float sample)) {
     chunk.Push(sample);
@@ -89,8 +89,8 @@ chunk.Clear();
 Communication protocols often have bounded recursion/nesting.
 
 ```csharp
-// Parse nested message with max depth 32
-var stack = new InlineStack32<Message>();
+// Parse nested message with max depth 16
+var stack = new InlineStack16<Message>();
 stack.Push(root);
 
 while (stack.Count > 0) {

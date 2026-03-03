@@ -1,27 +1,39 @@
-# InlineQueue32<T>
+# InlineQueue<T> (sizes 8, 16, 32)
 
-A high-performance, stack-allocated FIFO (First-In-First-Out) collection with a fixed capacity of 32 unmanaged elements using circular buffer semantics.
+A high-performance, stack-allocated FIFO (First-In-First-Out) collection with fixed capacity of 8, 16, or 32 unmanaged elements using circular buffer semantics.
 
 ## Overview
 
-`InlineQueue32<T>` provides queue semantics with zero heap allocations. Internally, it maintains a circular buffer with head and tail pointers, enabling O(1) enqueue and dequeue operations without element shifting.
+`InlineQueue8<T>`, `InlineQueue16<T>`, and `InlineQueue32<T>` provide queue semantics with zero heap allocations. Internally, they maintain a circular buffer with head and tail pointers, enabling O(1) enqueue and dequeue operations without element shifting. Choose your size based on typical working set:
+- **InlineQueue8**: Minimal overhead (~44 bytes), 8-element max
+- **InlineQueue16**: Moderate overhead (~76 bytes), 16-element max
+- **InlineQueue32**: Larger overhead (~140 bytes), 32-element max
+
+> **Caution:** Inline storage means struct size equals `Capacity * sizeof(T)`.
+> Large element types increase stack usage and can trigger a
+> `StackOverflowException` if copied excessively; prefer `ref`/`in` or smaller variants.
+
+All sizes are `ref struct` types optimized for ultra-low latency.
 
 **Key characteristics**:
-- Fixed capacity: exactly 32 elements
+- Fixed capacity: exactly 8, 16, or 32 elements (depending on variant)
 - Stack-allocated: no heap allocation
 - Circular buffer: O(1) enqueue/dequeue (no shifting)
 - Ref struct: cannot be stored in classes or arrays
-- Wrap-around handling: mask-based indexing (32 is power of 2)
+- Wrap-around handling: mask-based indexing (capacity is power of 2)
 
 ## Type signature
 
 ```csharp
-public ref struct InlineQueue32<T> where T : unmanaged, IEquatable<T>
+public ref struct InlineQueue8<T> where T : unmanaged, IEquatable<T>
 {
-    public const int Capacity = 32;
+    public const int Capacity = 8;
     public int Count { get; }
     // ... methods ...
 }
+
+// Similarly for InlineQueue16<T> and InlineQueue32<T>
+// with Capacity = 16 and 32 respectively
 ```
 
 ## API reference
@@ -30,11 +42,13 @@ public ref struct InlineQueue32<T> where T : unmanaged, IEquatable<T>
 
 ```csharp
 // Default constructor: empty queue
-var queue = new InlineQueue32<int>();
+var queue8 = new InlineQueue8<int>();
+var queue16 = new InlineQueue16<int>();
+var queue32 = new InlineQueue32<int>();
 
 // No span-based constructor; use repeated Enqueue instead
 for (int i = 0; i < 5; i++) {
-    queue.Enqueue(i);
+    queue8.Enqueue(i);
 }
 ```
 
@@ -302,48 +316,54 @@ for (int cycle = 0; cycle < 10; cycle++) {
 
 | Exception | Condition |
 |-----------|-----------|
-| `InvalidOperationException` | Enqueue when Count == 32 |
+| `InvalidOperationException` | Enqueue when Count == capacity (8, 16, or 32) |
 | `InvalidOperationException` | Dequeue when Count == 0 |
 | `InvalidOperationException` | Peek when Count == 0 |
 
 ## Limitations
 
-- **Fixed capacity**: Exactly 32 elements; exceeding throws
+- **Fixed capacity**: Exactly 8, 16, or 32 elements (depending on variant); exceeding throws
 - **Unmanaged types only**: `T : unmanaged, IEquatable<T>`
 - **No bounds checking**: Unsafe methods assume valid state (or use Try- variants)
 - **Stack storage**: Cannot be stored in reference types or async contexts
-- **Value semantics**: Assignment and parameter passing copy the entire struct (up to 140 bytes)
+- **Value semantics**: Assignment and parameter passing copy the entire struct (44-140 bytes depending on size)
+- **Queue size impact on stack**: Queues use 3 int fields vs 1 for lists/stacks, so they have more overhead
 
 ## Enumerator behavior
 
 The enumerator is a `ref struct` that handles wrap-around correctly:
 
 ```csharp
-var queue = new InlineQueue32<int>();
-for (int i = 1; i <= 20; i++) queue.Enqueue(i);
-for (int i = 0; i < 10; i++) queue.Dequeue();  // Dequeue 1-10
-for (int i = 21; i <= 30; i++) queue.Enqueue(i);  // Enqueue 21-30
+var queue = new InlineQueue16<int>();
+for (int i = 1; i <= 12; i++) queue.Enqueue(i);
+for (int i = 0; i < 6; i++) queue.Dequeue();  // Dequeue 1-6
+for (int i = 13; i <= 18; i++) queue.Enqueue(i);  // Enqueue 13-18
 
 // foreach correctly handles wrap-around
 foreach (var item in queue) {
-    Console.WriteLine(item);  // Prints: 11-20, 21-30 (correct FIFO order)
+    Console.WriteLine(item);  // Prints: 7-12, 13-18 (correct FIFO order)
 }
 ```
 
 ## Performance expectations
 
-- **Enqueue/Dequeue**: O(1) constant time, minimal instructions
+- **Enqueue/Dequeue**: O(1) constant time, circular buffer operations
 - **No shifting**: Unlike RemoveAt on lists, queue operations don't move elements
 - **Memory**: 0 allocations vs 1 for Queue<T>
-- **Copy cost**: ~4ns for `InlineQueue32<int>` (slightly larger due to 3 fields vs 2 in stack)
+- **Copy cost**: 
+  - `InlineQueue8<int>`: ~1ns
+  - `InlineQueue16<int>`: ~2ns
+  - `InlineQueue32<int>`: ~4ns
+  (Slightly larger than stacks due to 3 fields vs 2)
 
 ## When to use
 
-- Message queues with bounded depth
+- Message queues with bounded depth (8-32 messages)
 - Packet buffers in networking
 - Task schedulers with fixed work queue
 - BFS (breadth-first search) with bounded depth
 - Frame-local processing queues
+- FIFO buffers where no shifting is desired
 
 ## When NOT to use
 
@@ -351,3 +371,4 @@ foreach (var item in queue) {
 - Thread-safe queues (use ConcurrentQueue<T>)
 - Storing in class fields or async contexts
 - Unbounded or highly variable queue depths
+- Scenarios where thread-safety is required

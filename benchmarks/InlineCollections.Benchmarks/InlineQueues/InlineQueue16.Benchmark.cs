@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Jobs;
@@ -9,7 +7,7 @@ namespace Benchmarks
 {
     [SimpleJob(RuntimeMoniker.Net80, invocationCount: 100000)]
     [MemoryDiagnoser]
-    public class InlineQueueBenchmark
+    public class InlineQueue16Benchmark
     {
         private const int InnerOps = 100;
 
@@ -17,22 +15,22 @@ namespace Benchmarks
         [Benchmark(Baseline = true)]
         public void SysQueue_Cycle()
         {
-            var queue = new Queue<int>(32);
+            var queue = new Queue<int>(16);
             for (int i = 0; i < InnerOps; i++)
             {
-                for (int j = 0; j < 16; j++) queue.Enqueue(j);
-                for (int j = 0; j < 16; j++) queue.Dequeue();
+                for (int j = 0; j < 8; j++) queue.Enqueue(j);
+                for (int j = 0; j < 8; j++) queue.Dequeue();
             }
         }
 
         [Benchmark]
         public void InlineQueue_Cycle()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             for (int i = 0; i < InnerOps; i++)
             {
-                for (int j = 0; j < 16; j++) queue.Enqueue(j);
-                for (int j = 0; j < 16; j++) queue.Dequeue();
+                for (int j = 0; j < 8; j++) queue.Enqueue(j);
+                for (int j = 0; j < 8; j++) queue.Dequeue();
             }
         }
 
@@ -40,9 +38,9 @@ namespace Benchmarks
         [Benchmark]
         public int InlineQueue_WrapAround()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             int sum = 0;
-            for (int i = 0; i < 20; i++) queue.Enqueue(i);
+            for (int i = 0; i < 10; i++) queue.Enqueue(i);
 
             for (int i = 0; i < InnerOps; i++)
             {
@@ -55,9 +53,9 @@ namespace Benchmarks
         [Benchmark]
         public int SysQueue_WrapAround()
         {
-            var queue = new Queue<int>(32);
+            var queue = new Queue<int>(16);
             int sum = 0;
-            for (int i = 0; i < 20; i++) queue.Enqueue(i);
+            for (int i = 0; i < 10; i++) queue.Enqueue(i);
 
             for (int i = 0; i < InnerOps; i++)
             {
@@ -70,8 +68,8 @@ namespace Benchmarks
         [Benchmark]
         public int InlineQueue_Foreach()
         {
-            var queue = new InlineQueue32<int>();
-            for (int j = 0; j < 32; j++) queue.Enqueue(j);
+            var queue = new InlineQueue16<int>();
+            for (int j = 0; j < 16; j++) queue.Enqueue(j);
 
             int sum = 0;
             for (int i = 0; i < InnerOps; i++)
@@ -84,8 +82,8 @@ namespace Benchmarks
         [Benchmark]
         public int SysQueue_Foreach()
         {
-            var queue = new Queue<int>(32);
-            for (int j = 0; j < 32; j++) queue.Enqueue(j);
+            var queue = new Queue<int>(16);
+            for (int j = 0; j < 16; j++) queue.Enqueue(j);
 
             int sum = 0;
             for (int i = 0; i < InnerOps; i++)
@@ -98,7 +96,7 @@ namespace Benchmarks
         [Benchmark]
         public void InlineQueue_Clear()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             for (int i = 0; i < InnerOps; i++)
             {
                 queue.Enqueue(1);
@@ -110,7 +108,7 @@ namespace Benchmarks
         [Benchmark]
         public void SysQueue_Clear()
         {
-            var queue = new Queue<int>(32);
+            var queue = new Queue<int>(16);
             for (int i = 0; i < InnerOps; i++)
             {
                 queue.Enqueue(1);
@@ -122,7 +120,7 @@ namespace Benchmarks
         [Benchmark]
         public bool InlineQueue_TryEnqueueDequeue_Full()
         {
-            var queue = new InlineQueue32<int>();
+            var queue = new InlineQueue16<int>();
             bool success = true;
             for (int i = 0; i < InnerOps; i++)
             {
@@ -134,7 +132,7 @@ namespace Benchmarks
 
         public static void Run()
         {
-            var summary = BenchmarkRunner.Run<InlineQueueBenchmark>();
+            var summary = BenchmarkRunner.Run<InlineQueue16Benchmark>();
         }
     }
 }

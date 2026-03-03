@@ -1,7 +1,7 @@
-using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using InlineCollections.CoreLogic;
+using InlineCollections.Enumeration;
 
 namespace InlineCollections
 {
@@ -9,6 +9,13 @@ namespace InlineCollections
     /// Provides a high-performance, stack-allocated List with a fixed capacity of 32 elements.
     /// Targeted at ultra-low latency scenarios with zero heap allocations.
     /// </summary>
+    /// <remarks>
+    /// Elements are stored inline, so the struct size equals <c>Capacity * sizeof(T)</c>.
+    /// Using a large unmanaged <c>T</c> may impose significant stack memory pressure and
+    /// could lead to a <see cref="StackOverflowException"/>. Consider passing the
+    /// collection by <c>ref</c> or <c>in</c> to avoid expensive copies, or choose a
+    /// smaller variant (8 or 16) or a heap-based collection when storing large types.
+    /// </remarks>
     /// <typeparam name="T">The type of unmanaged elements in the list.</typeparam>
     [SkipLocalsInit]
     [StructLayout(LayoutKind.Sequential)]
@@ -28,12 +35,18 @@ namespace InlineCollections
         public readonly int Count => _count;
 
         /// <summary>
+        /// Returns an enumerator for the <see cref="InlineList32{T}"/>.
+        /// </summary>
+        public Enumerator<T> GetEnumerator() => new(AsSpan());
+
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="InlineList32{T}"/> struct with initial items.
         /// </summary>
         /// <param name="items">The span of items to initialize the list with.</param>
         public InlineList32(ReadOnlySpan<T> items)
         {
-            if (items.Length > Capacity) ThrowFull();
+            if (items.Length > Capacity) InlineListCore.ThrowFull(Capacity);
             _buffer = default;
             _count = 0;
             AddRange(items);
@@ -66,8 +79,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Add(T item)
         {
-            if ((uint)_count >= Capacity) ThrowFull();
-            Unsafe.Add(ref _buffer[0], _count++) = item;
+            InlineListCore.Add(in item, _buffer, ref _count);
         }
 
         /// <summary>
@@ -78,9 +90,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryAdd(T item)
         {
-            if ((uint)_count >= Capacity) return false;
-            Unsafe.Add(ref _buffer[0], _count++) = item;
-            return true;
+            return InlineListCore.TryAdd(in item, _buffer, ref _count);
         }
 
         /// <summary>
@@ -88,9 +98,7 @@ namespace InlineCollections
         /// </summary>
         public void AddRange(ReadOnlySpan<T> items)
         {
-            if ((uint)(_count + items.Length) > Capacity) ThrowFull();
-            items.CopyTo(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref _buffer[0], _count), items.Length));
-            _count += items.Length;
+            InlineListCore.AddRange(items, _buffer, ref _count);
         }
 
         /// <summary>
@@ -100,16 +108,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Insert(int index, T item)
         {
-            // Direct memory shift - assumes index is valid and count < Capacity
-            int remaining = _count - index;
-            if (remaining > 0)
-            {
-                Span<T> baseSpan = MemoryMarshal.CreateSpan(ref Unsafe.AsRef(in _buffer[0]), Capacity);
-                baseSpan.Slice(index, remaining).CopyTo(baseSpan.Slice(index + 1));
-            }
-
-            Unsafe.Add(ref _buffer[0], index) = item;
-            _count++;
+            InlineListCore.Insert(index, in item, _buffer, ref _count);
         }
 
         /// <summary>
@@ -118,11 +117,7 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryInsert(int index, T item)
         {
-            if ((uint)_count >= Capacity || (uint)index > (uint)_count)
-                return false;
-
-            Insert(index, item);
-            return true;
+            return InlineListCore.TryInsert(index, in item, _buffer, ref _count);
         }
 
         /// <summary>
@@ -130,15 +125,7 @@ namespace InlineCollections
         /// </summary>
         public void RemoveAt(int index)
         {
-            if ((uint)index >= (uint)_count) ThrowIndexOutOfRange();
-            int remaining = _count - index - 1;
-            if (remaining > 0)
-            {
-                // Optimized memory shift using Spans
-                Span<T> baseSpan = MemoryMarshal.CreateSpan(ref _buffer[0], Capacity);
-                baseSpan.Slice(index + 1, remaining).CopyTo(baseSpan.Slice(index));
-            }
-            _count--;
+            InlineListCore.RemoveAt<T>(index, _buffer, ref _count);
         }
 
         /// <summary>
@@ -147,20 +134,14 @@ namespace InlineCollections
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Remove(T item)
         {
-            int index = AsSpan().IndexOf(item);
-            if (index >= 0)
-            {
-                RemoveAt(index);
-                return true;
-            }
-            return false;
+            return InlineListCore.Remove(in item, _buffer, ref _count);
         }
 
         /// <summary>
         /// Determines whether an element is in the <see cref="InlineList32{T}"/>.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public readonly bool Contains(T item) => AsSpan().Contains(item);
+        public readonly bool Contains(T item) => InlineListCore.Contains(in item, _buffer, _count);
 
         /// <summary>
         /// Removes all objects from the <see cref="InlineList32{T}"/>.
@@ -173,34 +154,5 @@ namespace InlineCollections
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly Span<T> AsSpan() => MemoryMarshal.CreateSpan(ref Unsafe.AsRef(in _buffer[0]), _count);
-
-        /// <summary>
-        /// Returns an enumerator for the <see cref="InlineList32{T}"/>.
-        /// </summary>
-        public Enumerator GetEnumerator() => new(AsSpan());
-
-        /// <summary>
-        /// Enumerates the elements of an <see cref="InlineList32{T}"/>.
-        /// </summary>
-        public ref struct Enumerator
-        {
-            private Span<T> _span;
-            private int _index;
-
-            internal Enumerator(Span<T> span)
-            {
-                _span = span;
-                _index = -1;
-            }
-
-            public readonly ref T Current => ref _span[_index];
-            public bool MoveNext() => ++_index < _span.Length;
-        }
-
-        [DoesNotReturn]
-        private static void ThrowFull() => throw new InvalidOperationException("InlineList capacity exceeded (32).");
-
-        [DoesNotReturn]
-        private static void ThrowIndexOutOfRange() => throw new ArgumentOutOfRangeException("index", "Index was out of range.");
     }
 }
